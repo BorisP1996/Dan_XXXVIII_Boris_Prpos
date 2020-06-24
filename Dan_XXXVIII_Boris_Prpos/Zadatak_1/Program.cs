@@ -10,6 +10,11 @@ namespace Zadatak_1
     {
         static void Main(string[] args)
         {
+            Console.WriteLine();
+            for (int i = 0; i < 5; i++)
+            {
+                Console.WriteLine("thread");
+            }
         }
     }
 }
