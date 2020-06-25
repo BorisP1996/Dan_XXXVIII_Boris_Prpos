@@ -2,9 +2,7 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Text;
 using System.Threading;
-using System.Threading.Tasks;
 
 namespace Zadatak_1
 {
@@ -17,6 +15,7 @@ namespace Zadatak_1
         static List<Thread> threadList = new List<Thread>();
         static int waitingTime = 0;
         static object lockObject = new object();
+        static CountdownEvent countdown = new CountdownEvent(2);
 
         static void Main(string[] args)
         {
@@ -24,7 +23,114 @@ namespace Zadatak_1
             Thread RouteGenerator = new Thread(() => SelectRoutes());
             RouteGenerator.Start();
             RouteGenerator.Join();
+
+            Thread TruckGenerator = new Thread(() => CreateTrucks());
+            TruckGenerator.Start();
+            TruckGenerator.Join();
+
+            //incrementing counter by 2
+            for (int i = 0; i < threadList.Count; i += 2)
+            {
+                threadList[i].Start();
+                threadList[i + 1].Start();
+                //waiting for signal (two times)
+                countdown.Wait();
+                //if countodown counter is equal to 0, than reset (counter = 2 again)
+                //this means: when two threads are started they decrement counter to 0,
+                //reseting counter to 2 allows next two threads to start
+                if (countdown.IsSet)
+                {
+                    countdown.Reset();
+                }
+            }
+
+            Thread ShipingThread = new Thread(() => Shiping());
+            ShipingThread.Start();
+            ShipingThread.Join();
+
+            Thread DeliveringThread = new Thread(() => Delivering());
+            DeliveringThread.Start();
+
+            Console.ReadLine();
         }
+        /// <summary>
+        /// Via this method, every truck starts at the same time
+        /// </summary>
+        static void Shiping()
+        {
+            Random rnd = new Random();
+
+            for (int i = 0; i < threadList.Count; i++)
+            {
+                Console.WriteLine("{0} is headed to unloading point,using route {1}.(Expected delay time: 0.5s-5s)", threadList[i].Name, Routes[i]);
+            }
+        }
+        /// <summary>
+        /// Trucks (threads) deliver cargo, if they are late they return to starting point
+        /// </summary>
+        static void Delivering()
+        {
+            Random rnd = new Random();
+            //going through static list that contains threads
+            for (int i = 0; i < threadList.Count; i++)
+            {
+                lock (lockObject)
+                {
+                    //random waiting time
+                    int unloadWait = rnd.Next(500, 5001);
+                    Thread.Sleep(unloadWait);
+                    //if time is under 3 sec, everything is ok
+                    if (unloadWait < 3000)
+                    {
+                        Console.WriteLine("{0} has arrived at unloading site.", threadList[i].Name);
+                        Thread.Sleep((int)(unloadWait / 1.5));
+                        Console.WriteLine("{0} has unloaded the cargo.", threadList[i].Name);
+                    }
+                    //if time is above 3 sec, they return back
+                    else
+                    {
+                        Console.WriteLine("{0} is late! Going back to starting point...(Delay time bigger than 3s)", threadList[i].Name);
+                        Thread.Sleep(unloadWait);
+                        Console.WriteLine("{0} returned to starting point.", threadList[i].Name);
+                    }
+                }
+            }
+        }
+        /// <summary>
+        /// Creating threads 
+        /// </summary>
+        static void CreateTrucks()
+        {
+            for (int i = 0; i < 10; i++)
+            {
+                //forwarding method to thread
+                Thread t = new Thread(() => Loading(Thread.CurrentThread))
+                {
+                    Name = string.Format("Truck {0}", i + 1)
+                };
+                //inserting them into list
+                threadList.Add(t);
+            }
+
+        }
+        /// <summary>
+        /// threads (trucks) are loading cargo. Each one waits random amount of time (500-5000 ms)
+        /// </summary>
+        /// <param name="t"></param>
+        static void Loading(Thread t)
+        {
+            Random rnd = new Random();
+            waitingTime = rnd.Next(500, 5001);
+            Console.WriteLine("{0} is loading.", t.Name);
+            Thread.Sleep(waitingTime);
+            Console.WriteLine("\t{0} has left the loading place.", t.Name);
+            //Signaling that countdown event counter is decremented
+            countdown.Signal();
+
+        }
+        /// <summary>
+        /// Method generates numbers, 10 smallest that can be divided with 3 will be selected
+        /// </summary>
         static void GenerateRoutes()
         {
             Console.WriteLine("Manager is waiting for routes to generate...");
